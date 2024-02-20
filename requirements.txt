@@ -1,0 +1,4 @@
+numpy~=1.26.4
+motpy~=0.0.10
+scipy~=1.12.0
+opencv-contrib-python
