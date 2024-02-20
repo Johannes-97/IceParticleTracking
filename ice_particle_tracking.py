@@ -1,18 +1,60 @@
 import os
 import cv2
-import numpy as np
 from motpy import ModelPreset, MultiObjectTracker, IOUAndFeatureMatchingFunction
-from motpy.testing_viz import draw_track
 from Detector import Detector
 from ParticleTracks import ParticleTracks
 
 
-def mb_particle_tracking(input_directory: str, filter_by_length: bool = True, filter_by_velocity: bool = True,
-                         filter_by_linearity: bool = True, min_length: int = 10, min_velocity: float = 5.0,
-                         min_p: float = 0.99, model_spec=ModelPreset.constant_velocity_and_static_box_size_2d.value):
-    dt = 0.1
+def read_img_and_frame(filename):
+    """
+    Function to read in image and frame number from filename
+    :param filename: filename of image to be read
+    :return: OpenCV image object and (int) frame number
+    """
+    img = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
+    filename = filename.split("\\", 1)[1]
+    if "_" in filename:
+        filename = filename.split("_", 1)[1]
+    return img, int(filename[:-4])
+
+
+def draw_tracks(img, track_data):
+    """
+    Function to draw tracking results to image
+    :param img: OpenCV grayscale image
+    :param track_data: ParticleTracks object
+    """
+    rgb_img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 128, 0), (0, 128, 255), (255, 0, 255)]
+    color_index = 0
+    for centroids in track_data.centroids:
+        color = colors[color_index]
+        for i in range(len(centroids[0])):
+            cv2.circle(rgb_img, (int(centroids[0][i]), int(centroids[1][i])), 2, color, -1)
+        color_index = (color_index + 1) % len(colors)
+    cv2.imshow("Tracking Result", rgb_img)
+    cv2.waitKey(0)
+
+
+def ice_particle_tracking(input_directory: str, filter_by_length: bool = True, filter_by_velocity: bool = True,
+                          filter_by_linearity: bool = True, min_length: int = 10, min_velocity: float = 5.0,
+                          min_p: float = 0.99, model_spec=ModelPreset.constant_velocity_and_static_box_size_2d.value,
+                          show_result: bool = True):
+    """
+    Function to performed motion-based multiple-object tracking of shed ice particles
+    :param input_directory:
+    :param filter_by_length:
+    :param filter_by_velocity:
+    :param filter_by_linearity:
+    :param min_length:
+    :param min_velocity:
+    :param min_p:
+    :param model_spec:
+    :param show_result:
+    :return:
+    """
     tracker = MultiObjectTracker(
-        dt=dt,
+        dt=0.1,
         model_spec=model_spec,
         matching_fn=IOUAndFeatureMatchingFunction(min_iou=0.1),
         active_tracks_kwargs={'min_steps_alive': 2, 'max_staleness': 2},
@@ -22,53 +64,23 @@ def mb_particle_tracking(input_directory: str, filter_by_length: bool = True, fi
 
     for filename in os.listdir(input_directory):
         if filename.endswith(".png"):
-            img = cv2.imread(os.path.join(input_directory, filename), cv2.IMREAD_GRAYSCALE)
-            if "_" in filename:
-                filename = filename.split("_", 1)[1]
-            current_frame = int(filename[:-4])
-        detections = detector.detect(img)
-        active_tracks = tracker.step(detections)
-
-        for track in active_tracks:
-            draw_track(img, track)
-            if track.id in track_data.track_id:
-                idx = track_data.track_id.index(track.id)
-                xy = np.array([np.mean([track.box[0], track.box[2]]), np.mean([track.box[1], track.box[3]])])
-                ds = np.linalg.norm(track_data.centroids[idx][:, -1] - xy)
-                df = current_frame - track_data.frames[idx][-1]
-                if ds / df < min_velocity:
-                    del track
-                else:
-                    track_data.frames[idx] = np.append(track_data.frames[idx], current_frame)
-                    track_data.centroids[idx] = np.array(
-                        [np.append(track_data.centroids[idx][0, :], xy[0]),
-                         np.append(track_data.centroids[idx][1, :], xy[1])])
-            else:
-                track_data.track_id.append(track.id)
-                track_data.frames.append(np.array([current_frame]))
-                track_data.centroids.append(
-                    np.array([[np.mean([track.box[0], track.box[2]])], [np.mean([track.box[1], track.box[3]])]]))
-
-        cv2.imshow('preview', img)
-        cv2.waitKey(1)
+            img, current_frame = read_img_and_frame(os.path.join(input_directory, filename))
+            detections = detector.detect(img)
+            active_tracks = tracker.step(detections)
+            active_tracks = track_data.delete_stalled_tracks(active_tracks, current_frame, min_velocity)
+            track_data.update(active_tracks, img, current_frame)
 
     cv2.destroyAllWindows()
     filter_criteria = track_data.FilterCriteria(filter_by_length, filter_by_velocity, filter_by_linearity,
                                                 min_length, min_velocity, min_p)
     track_data = track_data.filter_tracks(filter_criteria)
-    color = 255
-    filename = os.listdir(input_directory)[0]
-    img = cv2.imread(os.path.join(input_directory, filename))
-    for centroids in track_data.centroids:
-        x_points = np.array(centroids[0]).astype('uint32')
-        y_points = np.array(centroids[1]).astype('uint32')
-        img[y_points.T, x_points.T] = color
-    cv2.imshow('Result', img)
-    cv2.waitKey(0)
+    if show_result:
+        img, _ = read_img_and_frame(os.path.join(input_directory, filename))
+        draw_tracks(img, track_data)
 
 
 if __name__ == "__main__":
-    mb_particle_tracking("C:/Users/JohannesBurger/AIIS/3D_Ice_Shedding_Trajectory_Reconstruction_on_a_Full"
-                         "-Scale_Propeller/02_Data/Calib0/3/ChronosMono/SE_01/PNG_PP",
-                         filter_by_length=True, filter_by_velocity=True, filter_by_linearity=True,
-                         min_length=15, min_velocity=10.0, min_p=0.9975)
+    ice_particle_tracking("C:/Users/JohannesBurger/AIIS/3D_Ice_Shedding_Trajectory_Reconstruction_on_a_Full"
+                         "-Scale_Propeller/02_Data/Calib2/10/ChronosRGB/SE_01/PNG_PP",
+                          filter_by_length=True, filter_by_velocity=True, filter_by_linearity=True,
+                          min_length=10, min_velocity=5.0, min_p=0.99, show_result=True)

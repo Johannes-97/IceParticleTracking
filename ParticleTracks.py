@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.stats import pearsonr
+from motpy.testing_viz import draw_track
+import cv2
 
 
 class ParticleTracks(object):
@@ -14,6 +16,43 @@ class ParticleTracks(object):
         self.track_id = []
         self.centroids = []
         self.frames = []
+
+    def update(self, active_tracks, img, current_frame):
+        """
+        Function to update ParticleTracks object with latest tracking results
+        :param active_tracks: active_tracks attribute of motpy multiple object tracker
+        :param img: OpenCV grayscale image
+        :param current_frame: index of currently tracked frame
+        :return:
+        """
+        for track in active_tracks:
+            draw_track(img, track)
+            if track.id in self.track_id:
+                idx = self.track_id.index(track.id)
+                xy = np.array([np.mean([track.box[0], track.box[2]]), np.mean([track.box[1], track.box[3]])])
+                self.frames[idx] = np.append(self.frames[idx], current_frame)
+                self.centroids[idx] = np.array(
+                    [np.append(self.centroids[idx][0, :], xy[0]),
+                     np.append(self.centroids[idx][1, :], xy[1])])
+            else:
+                self.track_id.append(track.id)
+                self.frames.append(np.array([current_frame]))
+                self.centroids.append(
+                    np.array([[np.mean([track.box[0], track.box[2]])], [np.mean([track.box[1], track.box[3]])]]))
+        cv2.imshow('preview', img)
+        cv2.waitKey(1)
+        return self
+
+    def delete_stalled_tracks(self, active_tracks, current_frame, min_velocity):
+        for track in active_tracks:
+            if track.id in self.track_id:
+                idx = self.track_id.index(track.id)
+                xy = np.array([np.mean([track.box[0], track.box[2]]), np.mean([track.box[1], track.box[3]])])
+                ds = np.linalg.norm(self.centroids[idx][:, -1] - xy)
+                df = current_frame - self.frames[idx][-1]
+                if ds / df < min_velocity:
+                    del track
+        return active_tracks
 
     def filter_by_length(self, min_length: int):
         """
