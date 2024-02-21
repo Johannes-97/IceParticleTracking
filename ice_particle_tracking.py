@@ -42,15 +42,15 @@ def ice_particle_tracking(input_directory: str, filter_by_length: bool = True, f
                           show_result: bool = True):
     """
     Function to performed motion-based multiple-object tracking of shed ice particles
-    :param input_directory:
-    :param filter_by_length:
-    :param filter_by_velocity:
-    :param filter_by_linearity:
-    :param min_length:
-    :param min_velocity:
-    :param min_p:
-    :param model_spec:
-    :param show_result:
+    :param input_directory: path to input directory containing a series of undistorted PNG files
+    :param filter_by_length: flag to filter tracking results by length
+    :param filter_by_velocity: flag to filter tracking results by velocity
+    :param filter_by_linearity: flag to filter tracking results by pearson correlation coefficient
+    :param min_length: threshold length for filter
+    :param min_velocity: threshold velocity for filter
+    :param min_p: threshold correlation coefficient for filter
+    :param model_spec: motpy tracking model
+    :param show_result: flag for showing results of tracking script
     :return:
     """
     tracker = MultiObjectTracker(
