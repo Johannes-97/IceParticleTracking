@@ -13,12 +13,9 @@ class Detector(object):
     def __init__(self):
         """
         Initialize variables used by Detector class
-        Args:
-            None
-        Return:
-            None
         """
         self.background_subtractor = cv2.createBackgroundSubtractorMOG2()
+        # self.background_subtractor = cv2.bgsegm.SuBSENSE()
 
     def detect(self, frame, min_blob_radius: float = 2.0, max_blob_radius: float = 15.0):
         """
@@ -41,7 +38,7 @@ class Detector(object):
         for cnt in contours:
             (x, y), radius = cv2.minEnclosingCircle(cnt)
             if min_blob_radius < radius < max_blob_radius:
-                radius = radius * 2
+                radius = radius
                 box = np.array([x - radius, y - radius, x + radius, y + radius])
                 detections.append(Detection(box))
         return detections

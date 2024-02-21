@@ -43,16 +43,30 @@ class ParticleTracks(object):
         cv2.waitKey(1)
         return self
 
-    def delete_stalled_tracks(self, active_tracks, current_frame, min_velocity):
-        for track in active_tracks:
-            if track.id in self.track_id:
-                idx = self.track_id.index(track.id)
-                xy = np.array([np.mean([track.box[0], track.box[2]]), np.mean([track.box[1], track.box[3]])])
-                ds = np.linalg.norm(self.centroids[idx][:, -1] - xy)
-                df = current_frame - self.frames[idx][-1]
-                if ds / df < min_velocity:
-                    del track
-        return active_tracks
+    def filter_by_center_circle(self):
+        xy = np.hstack(self.centroids)
+        x_med = int(np.median(xy[0, :]))
+        y_med = int(np.median(xy[1, :]))
+        r = np.sqrt(np.square(xy[0, :] - x_med) + np.square(xy[1, :] - y_med) * 1.5)
+        r_med = int(np.median(r) * 1.5)
+        inner_ids = r < r_med
+        xy_in = xy[:, inner_ids]
+        x_med_in = int(np.median(xy_in[0, :]))
+        y_med_in = int(np.median(xy_in[1, :]))
+        r = np.sqrt(np.square(xy_in[0, :] - x_med_in) + np.square(xy_in[1, :] - y_med_in))
+        r_in = int(np.quantile(r, 0.95))
+        x_center = int((x_med + x_med_in) / 2.0)
+        y_center = int((y_med + y_med_in) / 2.0)
+        r_circle = int((r_med / 1.5 + r_in) / 2.0)
+        for i in range(len(self.track_id)):
+            r = np.sqrt(np.square(self.centroids[i][0, :] - x_center) + np.square(self.centroids[i][1, :] - y_center))
+            outer_ids = r > r_circle
+            self.centroids[i] = self.centroids[i][:, outer_ids]
+            self.frames[i] = self.frames[i][outer_ids]
+        return self
+        # cv2.circle(img, (x_med, y_med), r_med, (255, 0, 0), thickness=3)
+        # cv2.circle(img, (x_med_in, y_med_in), r_in, (0, 255, 0), thickness=3)
+        # cv2.circle(img, (x_center, y_center), r_circle, (0, 0, 255), thickness=3)
 
     def filter_by_length(self, min_length: int):
         """
@@ -102,10 +116,12 @@ class ParticleTracks(object):
         """
         Function to filter tracks by various criteria.
         """
-        if filter_criteria.filter_by_length:
-            self.filter_by_length(filter_criteria.min_length)
+        self.filter_by_length(2)
         if filter_criteria.filter_by_velocity:
             self.filter_by_velocity(filter_criteria.min_velocity)
+        self.filter_by_center_circle()
+        if filter_criteria.filter_by_length:
+            self.filter_by_length(filter_criteria.min_length)
         if filter_criteria.filter_by_linearity:
             self.filter_by_linearity(filter_criteria.min_p)
         return self

@@ -32,7 +32,10 @@ def draw_tracks(img, track_data):
         for i in range(len(centroids[0])):
             cv2.circle(rgb_img, (int(centroids[0][i]), int(centroids[1][i])), 2, color, -1)
         color_index = (color_index + 1) % len(colors)
-    cv2.imshow("Tracking Result", rgb_img)
+
+    cv2.namedWindow("Tracking Result", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Tracking Result", 720, 540)
+    cv2.imshow("Tracking Result", rgb_img, )
     cv2.waitKey(0)
 
 
@@ -51,12 +54,11 @@ def ice_particle_tracking(input_directory: str, filter_by_length: bool = True, f
     :param min_p: threshold correlation coefficient for filter
     :param model_spec: motpy tracking model
     :param show_result: flag for showing results of tracking script
-    :return:
     """
     tracker = MultiObjectTracker(
         dt=0.1,
         model_spec=model_spec,
-        matching_fn=IOUAndFeatureMatchingFunction(min_iou=0.1),
+        matching_fn=IOUAndFeatureMatchingFunction(min_iou=0.05),
         active_tracks_kwargs={'min_steps_alive': 2, 'max_staleness': 2},
         tracker_kwargs={'max_staleness': 2})
     detector = Detector()
@@ -67,7 +69,6 @@ def ice_particle_tracking(input_directory: str, filter_by_length: bool = True, f
             img, current_frame = read_img_and_frame(os.path.join(input_directory, filename))
             detections = detector.detect(img)
             active_tracks = tracker.step(detections)
-            active_tracks = track_data.delete_stalled_tracks(active_tracks, current_frame, min_velocity)
             track_data.update(active_tracks, img, current_frame)
 
     cv2.destroyAllWindows()
@@ -81,6 +82,6 @@ def ice_particle_tracking(input_directory: str, filter_by_length: bool = True, f
 
 if __name__ == "__main__":
     ice_particle_tracking("C:/Users/JohannesBurger/AIIS/3D_Ice_Shedding_Trajectory_Reconstruction_on_a_Full"
-                         "-Scale_Propeller/02_Data/Calib2/10/ChronosRGB/SE_01/PNG_PP",
+                         "-Scale_Propeller/02_Data/Calib2/10/ChronosMono/SE_01/PNG_PP",
                           filter_by_length=True, filter_by_velocity=True, filter_by_linearity=True,
-                          min_length=10, min_velocity=5.0, min_p=0.99, show_result=True)
+                          min_length=10, min_velocity=5.0, min_p=0.98, show_result=True)
