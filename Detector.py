@@ -1,6 +1,7 @@
 from motpy.tracker import Detection
 import cv2
 import numpy as np
+from ManualBGS import ManualBGS
 
 
 class Detector(object):
@@ -10,12 +11,14 @@ class Detector(object):
         None
     """
 
-    def __init__(self):
+    def __init__(self, manual_BGS: bool = False, history: int = 50, varThreshold: int = 10):
         """
         Initialize variables used by Detector class
         """
-        self.background_subtractor = cv2.createBackgroundSubtractorMOG2()
-        # self.background_subtractor = cv2.bgsegm.SuBSENSE()
+        if manual_BGS:
+            self.background_subtractor = ManualBGS()
+        else:
+            self.background_subtractor = cv2.createBackgroundSubtractorMOG2(history, varThreshold)
 
     def detect(self, frame, min_blob_radius: float = 2.0, max_blob_radius: float = 15.0):
         """

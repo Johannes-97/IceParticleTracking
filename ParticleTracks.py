@@ -2,6 +2,7 @@ import numpy as np
 from scipy.stats import pearsonr
 from motpy.testing_viz import draw_track
 import cv2
+import json
 
 
 class ParticleTracks(object):
@@ -12,10 +13,17 @@ class ParticleTracks(object):
     frames: list of lists of frame numbers
     """
 
-    def __init__(self):
-        self.track_id = []
-        self.centroids = []
-        self.frames = []
+    def __init__(self, json_path: str = None):
+        if json_path is None:
+            self.track_id = []
+            self.centroids = []
+            self.frames = []
+        else:
+            with open(json_path, "r") as json_file:
+                data = json.load(json_file)
+            self.track_id = data["track_id"]
+            self.centroids = [np.array([c[0], c[1]]) for c in data["centroids"]]
+            self.frames = [np.array([f]) for f in data["frames"]]
 
     def update(self, active_tracks, img, current_frame):
         """
@@ -44,6 +52,16 @@ class ParticleTracks(object):
         return self
 
     def filter_by_center_circle(self):
+        """
+        Predicts a center circle from the particle tracks by the following method:
+        - Estimate first guess for center point as median of all tracks' points
+        - Estimate radius as 1.5 times median distance of all points to estimated center
+        - Estimate second guess for center point as median of all points inside first circle guess
+        - Estimate radius as 0.95 quantile distance of all points inside first circle guess to 2nd guess center
+        - Estimate actual center as mean of first and second guess
+        - Estimate actual radius as mean of first and second guess
+        :return:
+        """
         xy = np.hstack(self.centroids)
         x_med = int(np.median(xy[0, :]))
         y_med = int(np.median(xy[1, :]))
@@ -64,9 +82,6 @@ class ParticleTracks(object):
             self.centroids[i] = self.centroids[i][:, outer_ids]
             self.frames[i] = self.frames[i][outer_ids]
         return self
-        # cv2.circle(img, (x_med, y_med), r_med, (255, 0, 0), thickness=3)
-        # cv2.circle(img, (x_med_in, y_med_in), r_in, (0, 255, 0), thickness=3)
-        # cv2.circle(img, (x_center, y_center), r_circle, (0, 0, 255), thickness=3)
 
     def filter_by_length(self, min_length: int):
         """
@@ -85,16 +100,13 @@ class ParticleTracks(object):
         """
         Function to filter tracks by minimum magnitude of velocity in px/frame
         """
-        k = len(self.track_id) - 1
-        while k >= 0:
+        for k in range(len(self.track_id)):
             dx_df = np.gradient(self.centroids[k][0, :], self.frames[k])
             dy_df = np.gradient(self.centroids[k][1, :], self.frames[k])
-            v_min = np.min(np.sqrt(dx_df ** 2 + dy_df ** 2))
-            if v_min < min_velocity:
-                del self.frames[k]
-                del self.centroids[k]
-                del self.track_id[k]
-            k -= 1
+            ds_df = np.sqrt(np.square(dx_df) + np.square(dy_df))
+            keep_id = ds_df > min_velocity
+            self.centroids[k] = self.centroids[k][:, keep_id]
+            self.frames[k] = self.frames[k][keep_id]
         return self
 
     def filter_by_linearity(self, min_p: float):
@@ -116,15 +128,25 @@ class ParticleTracks(object):
         """
         Function to filter tracks by various criteria.
         """
-        self.filter_by_length(2)
+        self.filter_by_length(3)
         if filter_criteria.filter_by_velocity:
             self.filter_by_velocity(filter_criteria.min_velocity)
-        self.filter_by_center_circle()
+        if filter_criteria.filter_by_circle:
+            self.filter_by_center_circle()
         if filter_criteria.filter_by_length:
             self.filter_by_length(filter_criteria.min_length)
         if filter_criteria.filter_by_linearity:
             self.filter_by_linearity(filter_criteria.min_p)
         return self
+
+    def save_to_json(self, input_directory):
+        data = {
+            "track_id": self.track_id,
+            "centroids": [c.tolist() for c in self.centroids],
+            "frames": [f.tolist() for f in self.frames]
+        }
+        with open(input_directory + "\\track_data.json", "w") as json_file:
+            json.dump(data, json_file, indent=4)
 
     class FilterCriteria(object):
         """
@@ -137,10 +159,11 @@ class ParticleTracks(object):
         min_p: minimum value of pearson correlation coefficient
         """
 
-        def __init__(self, filter_by_length: bool = True, filter_by_velocity: bool = True,
-                     filter_by_linearity: bool = True, min_length: int = 10,
-                     min_velocity: float = 5.0, min_p: float = 0.98):
+        def __init__(self, filter_by_length: bool = True, filter_by_circle: bool = True,
+                     filter_by_velocity: bool = True, filter_by_linearity: bool = True,
+                     min_length: int = 10, min_velocity: float = 5.0, min_p: float = 0.98):
             self.filter_by_length = filter_by_length
+            self.filter_by_circle = filter_by_circle
             self.filter_by_velocity = filter_by_velocity
             self.filter_by_linearity = filter_by_linearity
             self.min_length = min_length
