@@ -145,7 +145,7 @@ class ParticleTracks(object):
             "centroids": [c.tolist() for c in self.centroids],
             "frames": [f.tolist() for f in self.frames]
         }
-        with open(input_directory + "\\track_data.json", "w") as json_file:
+        with open(input_directory + "\\particle_tracks.json", "w") as json_file:
             json.dump(data, json_file, indent=4)
 
     class FilterCriteria(object):

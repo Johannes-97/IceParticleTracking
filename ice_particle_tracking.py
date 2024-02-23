@@ -21,11 +21,13 @@ def read_img_and_frame(filename):
 def draw_tracks(input_dir, track_data):
     """
     Function to draw tracking results to image
-    :param img: OpenCV grayscale image
+    :param input_dir: input directory containing the png files to be tracked
     :param track_data: ParticleTracks object
     """
-    filename = os.listdir(input_dir)[1]
-    rgb_img = cv2.imread(os.path.join(input_dir,filename), cv2.IMREAD_COLOR)
+    for filename in os.listdir(input_dir):
+        if filename.endswith(".png"):
+            rgb_img = cv2.imread(os.path.join(input_dir,filename), cv2.IMREAD_COLOR)
+            break
     colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 128, 0), (0, 128, 255), (255, 0, 255)]
     color_index = 0
     for centroids in track_data.centroids:
@@ -65,21 +67,22 @@ def ice_particle_tracking(input_directory: str, manual_BGS: bool = False, filter
         matching_fn=IOUAndFeatureMatchingFunction(min_iou=0.01),
         active_tracks_kwargs={'min_steps_alive': 1, 'max_staleness': 1},
         tracker_kwargs={'max_staleness': 2})
-    track_data = ParticleTracks()
+    particle_tracks = ParticleTracks()
 
     for filename in os.listdir(input_directory):
         if filename.endswith(".png"):
             img, current_frame = read_img_and_frame(os.path.join(input_directory, filename))
             detections = detector.detect(img)
-            active_tracks = tracker.step(detections); track_data.update(active_tracks, img, current_frame)
-
+            active_tracks = tracker.step(detections)
+            particle_tracks.update(active_tracks, img, current_frame)
     cv2.destroyAllWindows()
-    filter_criteria = track_data.FilterCriteria(filter_by_length, filter_by_circle, filter_by_velocity,
+
+    filter_criteria = particle_tracks.FilterCriteria(filter_by_length, filter_by_circle, filter_by_velocity,
                                                 filter_by_linearity, min_length, min_velocity, min_p)
-    track_data = track_data.filter_tracks(filter_criteria)
-    track_data.save_to_json(input_directory)
+    particle_tracks = particle_tracks.filter_tracks(filter_criteria)
+    particle_tracks.save_to_json(input_directory)
     if show_result:
-        draw_tracks(input_directory, track_data)
+        draw_tracks(input_directory, particle_tracks)
 
 
 if __name__ == "__main__":
@@ -90,6 +93,6 @@ if __name__ == "__main__":
         'r_var_pos': 0.01  # measurement noise
     }
     ice_particle_tracking("C:/Users/JohannesBurger/AIIS/3D_Ice_Shedding_Trajectory_Reconstruction_on_a_Full"
-                         "-Scale_Propeller/02_Data/Calib0/1/ChronosRGB/SE_01/PNG_PP", manual_BGS=False,
+                         "-Scale_Propeller/02_Data/Calib2/10/ChronosRGB/SE_01/PNG_PP", manual_BGS=False,
                           filter_by_length=True, filter_by_circle=True, filter_by_velocity=True, filter_by_linearity=True,
-                          min_length=7, min_velocity=5.0, min_p=0.98, show_result=True, model_spec=model_spec)
+                          min_length=10, min_velocity=5.0, min_p=0.98, show_result=True, model_spec=model_spec)

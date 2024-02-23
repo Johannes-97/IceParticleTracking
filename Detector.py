@@ -20,7 +20,7 @@ class Detector(object):
         else:
             self.background_subtractor = cv2.createBackgroundSubtractorMOG2(history, varThreshold)
 
-    def detect(self, frame, min_blob_radius: float = 2.0, max_blob_radius: float = 15.0):
+    def detect(self, frame, min_blob_radius: float = 2.0, max_blob_radius: float = 30.0):
         """
         Detect objects in video frame using following pipeline
             - Perform Background Subtraction
