@@ -6,12 +6,14 @@ from ManualBGS import ManualBGS
 
 class Detector(object):
     """
-    Detector class to detect objects in video frame
+    Detector class object to detect particles in a video frame
     Attributes:
         None
     """
 
-    def __init__(self, manual_BGS: bool = False, history: int = 50, varThreshold: int = 10):
+    def __init__(self, manual_BGS: bool = False, compute_opening: bool = False,
+                 opening_kernel=np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype="uint8"),
+                 history: int = 50, varThreshold: int = 10):
         """
         Initialize variables used by Detector class
         """
@@ -19,6 +21,9 @@ class Detector(object):
             self.background_subtractor = ManualBGS()
         else:
             self.background_subtractor = cv2.createBackgroundSubtractorMOG2(history, varThreshold)
+        self.compute_opening = compute_opening
+        if compute_opening:
+            self.opening_kernel = opening_kernel
 
     def detect(self, frame, min_blob_radius: float = 2.0, max_blob_radius: float = 30.0):
         """
@@ -35,6 +40,9 @@ class Detector(object):
             detections: list of Detection class objects containing bound boxes of detected elements
         """
         foreground_mask = self.background_subtractor.apply(frame)
+        if self.compute_opening:
+            foreground_mask = cv2.erode(foreground_mask, self.opening_kernel)
+            foreground_mask = cv2.dilate(foreground_mask, self.opening_kernel)
         edges = cv2.Canny(foreground_mask, 100, 200)
         contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         detections = []

@@ -34,7 +34,7 @@ class ParticleTracks(object):
         :return:
         """
         for track in active_tracks:
-            draw_track(img, track)
+            draw_track(img, track, thickness = 2)
             if track.id in self.track_id:
                 idx = self.track_id.index(track.id)
                 xy = np.array([np.mean([track.box[0], track.box[2]]), np.mean([track.box[1], track.box[3]])])

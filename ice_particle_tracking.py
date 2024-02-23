@@ -42,31 +42,24 @@ def draw_tracks(input_dir, track_data):
     cv2.waitKey(0)
 
 
-def ice_particle_tracking(input_directory: str, manual_BGS: bool = False, filter_by_length: bool = True, filter_by_circle: bool = True,
-                          filter_by_velocity: bool = True, filter_by_linearity: bool = True, min_length: int = 10,
-                          min_velocity: float = 5.0, min_p: float = 0.99, show_result: bool = True,
-                          model_spec=ModelPreset.constant_velocity_and_static_box_size_2d.value):
+def ice_particle_tracking(input_directory: str, detector: Detector=Detector(),
+                          tracker: MultiObjectTracker = MultiObjectTracker(
+                                                        dt=0.1,
+                                                        model_spec=ModelPreset.constant_velocity_and_static_box_size_2d.value,
+                                                        matching_fn=IOUAndFeatureMatchingFunction(min_iou=0.01),
+                                                        active_tracks_kwargs={'min_steps_alive': 0, 'max_staleness': 1},
+                                                        tracker_kwargs={'max_staleness': 2}),
+                          filter_criteria: ParticleTracks.FilterCriteria=ParticleTracks.FilterCriteria(),
+                          show_result: bool = True):
     """
     Function to performed motion-based multiple-object tracking of shed ice particles
-    :param input_directory: path to input directory containing a series of undistorted PNG files
-    :param filter_by_length: flag to filter tracking results by length
-    :param filter_by_velocity: flag to filter tracking results by velocity
-    :param filter_by_linearity: flag to filter tracking results by pearson correlation coefficient
-    :param min_length: threshold length for filter
-    :param min_velocity: threshold velocity for filter
-    :param min_p: threshold correlation coefficient for filter
-    :param model_spec: motpy tracking model
-    :param show_result: flag for showing results of tracking script
+    :param input_directory: directory containing png files for tracking to be performed
+    :param detector: Detector class object of particle detector
+    :param tracker: MultiObjectTracker class object of motpy
+    :param filter_criteria: ParticleTracks.FilterCriteria class object containing filter criteria
+    :param show_result: flag for showing tracking results
+    :return:
     """
-    detector = Detector(manual_BGS)
-    if manual_BGS:
-        model_spec=detector.background_subtractor.model_spec.value
-    tracker = MultiObjectTracker(
-        dt=0.1,
-        model_spec=model_spec,
-        matching_fn=IOUAndFeatureMatchingFunction(min_iou=0.01),
-        active_tracks_kwargs={'min_steps_alive': 1, 'max_staleness': 1},
-        tracker_kwargs={'max_staleness': 2})
     particle_tracks = ParticleTracks()
 
     for filename in os.listdir(input_directory):
@@ -77,8 +70,6 @@ def ice_particle_tracking(input_directory: str, manual_BGS: bool = False, filter
             particle_tracks.update(active_tracks, img, current_frame)
     cv2.destroyAllWindows()
 
-    filter_criteria = particle_tracks.FilterCriteria(filter_by_length, filter_by_circle, filter_by_velocity,
-                                                filter_by_linearity, min_length, min_velocity, min_p)
     particle_tracks = particle_tracks.filter_tracks(filter_criteria)
     particle_tracks.save_to_json(input_directory)
     if show_result:
@@ -86,13 +77,21 @@ def ice_particle_tracking(input_directory: str, manual_BGS: bool = False, filter
 
 
 if __name__ == "__main__":
+    detector = Detector(compute_opening=False)
     model_spec = {
         'order_pos': 1, 'dim_pos': 2,  # position is a center in 2D space; under constant velocity model
         'order_size': 0, 'dim_size': 2,  # bounding box is 2 dimensional; under constant velocity model
         'q_var_pos': 1.,  # process noise
         'r_var_pos': 0.01  # measurement noise
     }
+    tracker = MultiObjectTracker(
+        dt=0.1,
+        model_spec=model_spec,
+        matching_fn=IOUAndFeatureMatchingFunction(min_iou=0.01),
+        active_tracks_kwargs={'min_steps_alive': 0, 'max_staleness': 1},
+        tracker_kwargs={'max_staleness': 2})
+    filter_criteria = ParticleTracks.FilterCriteria(filter_by_length=True, filter_by_circle=True, filter_by_velocity=True, filter_by_linearity=True,
+                          min_length=10, min_velocity=5.0, min_p=0.99)
     ice_particle_tracking("C:/Users/JohannesBurger/AIIS/3D_Ice_Shedding_Trajectory_Reconstruction_on_a_Full"
-                         "-Scale_Propeller/02_Data/Calib2/10/ChronosRGB/SE_01/PNG_PP", manual_BGS=False,
-                          filter_by_length=True, filter_by_circle=True, filter_by_velocity=True, filter_by_linearity=True,
-                          min_length=10, min_velocity=5.0, min_p=0.98, show_result=True, model_spec=model_spec)
+                         "-Scale_Propeller/02_Data/Calib2/10/ChronosMono/SE_01/PNG", detector, tracker, filter_criteria,
+                          show_result=True)
