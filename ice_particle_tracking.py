@@ -3,31 +3,30 @@ import cv2
 from motpy import ModelPreset, MultiObjectTracker, IOUAndFeatureMatchingFunction
 from Detector import Detector
 from ParticleTracks import ParticleTracks
+import glob
+import numpy as np
 
 
-def read_img_and_frame(filename):
+def read_img_and_frame(image_path):
     """
-    Function to read in image and frame number from filename
-    :param filename: filename of image to be read
+    Function to read in image and frame number from image_path
+    :param image_path: image_path of image to be read
     :return: OpenCV image object and (int) frame number
     """
-    img = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
-    filename = filename.split("\\", 1)[1]
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    _, filename = os.path.split(image_path)
     if "_" in filename:
         filename = filename.split("_", 1)[1]
     return img, int(filename[:-4])
 
 
-def draw_tracks(input_dir, track_data):
+def draw_tracks(image_path, track_data):
     """
     Function to draw tracking results to image
-    :param input_dir: input directory containing the png files to be tracked
+    :param image_path: path to background image
     :param track_data: ParticleTracks object
     """
-    for filename in os.listdir(input_dir):
-        if filename.endswith(".png"):
-            rgb_img = cv2.imread(os.path.join(input_dir,filename), cv2.IMREAD_COLOR)
-            break
+    rgb_img = cv2.imread(image_path, cv2.IMREAD_COLOR)
     colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 128, 0), (0, 128, 255), (255, 0, 255)]
     color_index = 0
     for centroids in track_data.centroids:
@@ -49,8 +48,7 @@ def ice_particle_tracking(input_directory: str, detector: Detector=Detector(),
                                                         matching_fn=IOUAndFeatureMatchingFunction(min_iou=0.01),
                                                         active_tracks_kwargs={'min_steps_alive': 0, 'max_staleness': 1},
                                                         tracker_kwargs={'max_staleness': 2}),
-                          filter_criteria: ParticleTracks.FilterCriteria=ParticleTracks.FilterCriteria(),
-                          show_result: bool = True):
+                          filter_criteria: ParticleTracks.FilterCriteria=ParticleTracks.FilterCriteria(), show_result: bool = True):
     """
     Function to performed motion-based multiple-object tracking of shed ice particles
     :param input_directory: directory containing png files for tracking to be performed
@@ -62,22 +60,23 @@ def ice_particle_tracking(input_directory: str, detector: Detector=Detector(),
     """
     particle_tracks = ParticleTracks()
 
-    for filename in os.listdir(input_directory):
-        if filename.endswith(".png"):
-            img, current_frame = read_img_and_frame(os.path.join(input_directory, filename))
-            detections = detector.detect(img)
-            active_tracks = tracker.step(detections)
-            particle_tracks.update(active_tracks, img, current_frame)
+    filenames = glob.glob(f"{input_directory}//*.png")
+    for filename in filenames:
+        img, current_frame = read_img_and_frame(filename)
+        detections = detector.detect(img)
+        active_tracks = tracker.step(detections)
+        particle_tracks.update(active_tracks, img, current_frame)
     cv2.destroyAllWindows()
 
     particle_tracks = particle_tracks.filter_tracks(filter_criteria)
     particle_tracks.save_to_json(input_directory)
     if show_result:
-        draw_tracks(input_directory, particle_tracks)
+        draw_tracks(filenames[0], particle_tracks)
 
 
 if __name__ == "__main__":
-    detector = Detector(compute_opening=False)
+    brightness_mask = np.load(r"C:\Users\JohannesBurger\AIIS\3D_Ice_Shedding_Trajectory_Reconstruction_on_a_Full-Scale_Propeller\02_Data\Calib2\Calibration\ChronosRGB\mask.npy")
+    detector = Detector(compute_opening=False, brightness_mask=brightness_mask)
     model_spec = {
         'order_pos': 1, 'dim_pos': 2,  # position is a center in 2D space; under constant velocity model
         'order_size': 0, 'dim_size': 2,  # bounding box is 2 dimensional; under constant velocity model
@@ -90,8 +89,8 @@ if __name__ == "__main__":
         matching_fn=IOUAndFeatureMatchingFunction(min_iou=0.01),
         active_tracks_kwargs={'min_steps_alive': 0, 'max_staleness': 1},
         tracker_kwargs={'max_staleness': 2})
-    filter_criteria = ParticleTracks.FilterCriteria(filter_by_length=True, filter_by_circle=True, filter_by_velocity=True, filter_by_linearity=True,
-                          min_length=10, min_velocity=5.0, min_p=0.99)
-    ice_particle_tracking("C:/Users/JohannesBurger/AIIS/3D_Ice_Shedding_Trajectory_Reconstruction_on_a_Full"
-                         "-Scale_Propeller/02_Data/Calib2/10/ChronosMono/SE_01/PNG", detector, tracker, filter_criteria,
+    filter_criteria = ParticleTracks.FilterCriteria(filter_by_length=True, filter_by_circle=False, filter_by_velocity=True, filter_by_linearity=True,
+                          min_length=5, min_velocity=5.0, min_p=0.99)
+    ice_particle_tracking(r"C:\Users\JohannesBurger\AIIS\3D_Ice_Shedding_Trajectory_Reconstruction_on_a_Full"
+                         r"-Scale_Propeller\02_Data\Calib2\11\ChronosRGB\SE_01\PNG_PP", detector, tracker, filter_criteria,
                           show_result=True)

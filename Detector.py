@@ -4,6 +4,7 @@ import numpy as np
 from ManualBGS import ManualBGS
 
 
+
 class Detector(object):
     """
     Detector class object to detect particles in a video frame
@@ -11,19 +12,17 @@ class Detector(object):
         None
     """
 
-    def __init__(self, manual_BGS: bool = False, compute_opening: bool = False,
-                 opening_kernel=np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype="uint8"),
-                 history: int = 50, varThreshold: int = 10):
+    def __init__(self, history: int = 50, varThreshold: int = 10, compute_opening: bool = False, brightness_mask=None,
+                 opening_kernel=np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], np.uint8)):
         """
         Initialize variables used by Detector class
         """
-        if manual_BGS:
-            self.background_subtractor = ManualBGS()
-        else:
-            self.background_subtractor = cv2.createBackgroundSubtractorMOG2(history, varThreshold)
+        self.background_subtractor = cv2.createBackgroundSubtractorMOG2(history, varThreshold)
         self.compute_opening = compute_opening
         if compute_opening:
             self.opening_kernel = opening_kernel
+        if brightness_mask is not None:
+            self.brightness_mask = brightness_mask
 
     def detect(self, frame, min_blob_radius: float = 2.0, max_blob_radius: float = 30.0):
         """
@@ -39,6 +38,8 @@ class Detector(object):
         Return:
             detections: list of Detection class objects containing bound boxes of detected elements
         """
+        if hasattr(self, "brightness_mask"):
+            frame[self.brightness_mask] = 0
         foreground_mask = self.background_subtractor.apply(frame)
         if self.compute_opening:
             foreground_mask = cv2.erode(foreground_mask, self.opening_kernel)
